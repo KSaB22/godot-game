@@ -1,0 +1,33 @@
+[gd_scene load_steps=2 format=3 uid="uid://c6op3cjtw62j7"]
+
+[ext_resource type="Script" uid="uid://bfqyh12kvyjs1" path="res://scripts/main_menu.gd" id="1_l6cm7"]
+
+[node name="MainMenu" type="Node2D"]
+script = ExtResource("1_l6cm7")
+
+[node name="Level" type="TextEdit" parent="."]
+offset_left = -144.0
+offset_top = -55.0
+offset_right = 148.0
+offset_bottom = -20.0
+placeholder_text = "Level (default = 1):"
+
+[node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="Seed" type="TextEdit" parent="."]
+offset_left = -144.0
+offset_top = 14.0
+offset_right = 148.0
+offset_bottom = 49.0
+placeholder_text = "Seed (default = 1234):"
+
+[node name="Button" type="Button" parent="."]
+offset_left = -38.0
+offset_top = 79.0
+offset_right = 41.0
+offset_bottom = 110.0
+text = "Continue"
+
+[connection signal="text_changed" from="Level" to="." method="_on_level_text_changed"]
+[connection signal="text_changed" from="Seed" to="." method="_on_seed_text_changed"]
+[connection signal="pressed" from="Button" to="." method="_on_button_pressed"]
