@@ -1,51 +1,89 @@
 extends Node2D
 
-enum Room_types {RECTANGLE, CIRCLE}
-enum Area_War {WIN, LOSE, COMBINE}
+enum Room_types { RECTANGLE, CIRCLE }
 
 const LAYER := 0
 const WALL_ATLAS := Vector2i(9, 6)
 
 var game_seed: int = 1234
-var level: int = 1
+var max_players: int = 2
 var room_dic := {}
 var room_tiles := {}
+
+# Track current/last room for the main player
+var current_room_id: int = -2
+var last_non_corridor_room_id: int = -2
+
 @onready var level_tile_map: TileMap = $TileMap
+@onready var main_player: CharacterBody2D = $Player
 
 func _ready() -> void:
 	generate_level()
+	var spawns: Array[Vector2i] = get_edge_spawns(max_players)
+	if spawns.size() > 0 and is_instance_valid(main_player):
+		main_player.global_position = tile_to_global(spawns[0])
 
 func _process(_delta: float) -> void:
-	pass
+	#var exact_room: int = get_current_room_id(false)
+	#var stable_room: int = get_current_room_id(true)
+	#print("exact:", exact_room, " stable:", stable_room)
+	return
 
 func generate_level() -> void:
 	seed(game_seed)
-	var amount_of_rooms: int = 100 # randi_range(level*2 , 4 * level)
+	var amount_of_rooms: int = 100 # randi_range(max_players*2 , 4 * max_players)
 	var level_size := Vector2i(180, 150)
 
 	level_tile_map.clear()
 	room_dic.clear()
 	room_tiles.clear()
 
-	print(amount_of_rooms)
 	for i in range(amount_of_rooms):
 		generate_room(i, level_size)
-	generate_walls()
-	connect_rooms()
+
+	connect_rooms()      # dig all corridors after rooms
+	generate_walls()     # single global pass to surround all floors
 
 # --- helpers -------------------------------------------------------
 
+func tile_to_global(tile: Vector2i) -> Vector2:
+	# World-space center of the cell
+	return level_tile_map.to_global(level_tile_map.map_to_local(tile))
+
+func global_to_tile(global_pos: Vector2) -> Vector2i:
+	# Convert a world position to tile coords on this TileMap
+	return level_tile_map.local_to_map(level_tile_map.to_local(global_pos))
+
+func room_id_at_tile(tile: Vector2i) -> int:
+	# >=0 room id, -1 corridor, -2 outside/void
+	return int(room_tiles[tile]) if  room_tiles.has(tile) else -2
+
+func room_id_at_global(global_pos: Vector2) -> int:
+	return room_id_at_tile(global_to_tile(global_pos))
+
+# Get the main player's current room.
+# use_last_known_inside=true will return the last non-corridor room when in a corridor.
+func get_current_room_id(use_last_known_inside: bool = false) -> int:
+	var rid: int = room_id_at_global(main_player.global_position)
+
+	# Update tracking vars
+	if rid != current_room_id:
+		current_room_id = rid
+		if rid >= 0:
+			last_non_corridor_room_id = rid
+
+	# Optional "sticky" room behavior while in corridor
+	if use_last_known_inside and rid == -1 and last_non_corridor_room_id >= 0:
+		return last_non_corridor_room_id
+
+	return rid
+
 func place_wall_at(p: Vector2i) -> void:
-	level_tile_map.set_cell(LAYER, p, 0, WALL_ATLAS)
-	# If this position was owned by a room, remove it from both maps
 	if room_tiles.has(p):
-		var rid: int = room_tiles[p]
-		room_tiles.erase(p)
-		if room_dic.has(rid) and room_dic[rid].has("tiles"):
-			room_dic[rid]["tiles"].erase(p)
+		return
+	level_tile_map.set_cell(LAYER, p, 0, WALL_ATLAS)
 
 func add_floor_tile(this_coords: Vector2i, i: int) -> void:
-	# Ownership
 	room_tiles[this_coords] = i
 	if room_dic.has(i):
 		if not room_dic[i].has("tiles"):
@@ -53,54 +91,29 @@ func add_floor_tile(this_coords: Vector2i, i: int) -> void:
 		if this_coords not in room_dic[i]["tiles"]:
 			room_dic[i]["tiles"].append(this_coords)
 
-	# Visual (random floor)
 	var tileset_picker := Vector2i(randi_range(6, 9), randi_range(0, 2))
 	level_tile_map.set_cell(LAYER, this_coords, 0, tileset_picker)
 
-func handle_war(this_coords: Vector2i, i: int) -> int:
-	# this_coords is guaranteed in room_tiles before calling handle_war
+# Always-combine overlap resolver
+func handle_combine(this_coords: Vector2i, i: int) -> int:
 	var j: int = room_tiles[this_coords]
 	if i == j:
 		return i
 
-	# Initialize relation if missing
-	if not room_dic[i]["war_with"].has(j):
-		var war_result: int = randi_range(1, 3)
-		room_dic[i]["war_with"][j] = Area_War.WIN if war_result == 1 else Area_War.LOSE if war_result == 2 else Area_War.COMBINE
-		if room_dic.has(j):
-			if not room_dic[j].has("war_with"):
-				room_dic[j]["war_with"] = {}
-			room_dic[j]["war_with"][i] = Area_War.LOSE if war_result == 1 else Area_War.WIN if war_result == 2 else Area_War.COMBINE
+	var low_id: int = i if i < j else j
+	var high_id: int = j if i < j else i
 
-		if war_result == 1:
-			print("Room ", i, " vs Room ", j, " → WIN")
-		elif war_result == 2:
-			print("Room ", i, " vs Room ", j, " → LOSE")
-		else:
-			print("Room ", i, " vs Room ", j, " → COMBINE")
+	if room_dic.has(high_id) and room_dic.has(low_id):
+		var high_tiles: Array = room_dic[high_id]["tiles"]
+		var low_tiles: Array = room_dic[low_id]["tiles"]
+		for tile in high_tiles:
+			if tile not in low_tiles:
+				low_tiles.append(tile)
+				room_tiles[tile] = low_id
+		room_dic.erase(high_id)
 
-	var res: int = room_dic[i]["war_with"][j]
-	match res:
-		Area_War.LOSE:
-			return i
-		Area_War.WIN:
-			add_floor_tile(this_coords, i)
-			return i
-		Area_War.COMBINE:
-			var low_id: int = i if i < j else j
-			var high_id: int = j if i < j else i
-
-			if room_dic.has(high_id) and room_dic.has(low_id):
-				var high_tiles: Array = room_dic[high_id]["tiles"]
-				var low_tiles: Array = room_dic[low_id]["tiles"]
-				for tile in high_tiles:
-					if tile not in low_tiles:
-						low_tiles.append(tile)
-						room_tiles[tile] = low_id
-				room_dic.erase(high_id)
-			return low_id
-
-	return i # fallback
+	room_tiles[this_coords] = low_id
+	return low_id
 
 # --- generation ----------------------------------------------------
 
@@ -108,7 +121,6 @@ func generate_room(i: int, level_size: Vector2i) -> void:
 	room_dic[i] = {
 		"type": Room_types.RECTANGLE if randf() < 0.8 else Room_types.CIRCLE,
 		"tiles": [],
-		"war_with": {},
 		"center": Vector2i.ZERO
 	}
 
@@ -125,9 +137,9 @@ func generate_room(i: int, level_size: Vector2i) -> void:
 				if not room_tiles.has(thiscoords):
 					add_floor_tile(thiscoords, i)
 				else:
-					i = handle_war(thiscoords, i)
+					i = handle_combine(thiscoords, i)
 
-	elif room_dic[i]["type"] == Room_types.CIRCLE:
+	else:
 		var radius: int = randi_range(3, 10)
 		var center: Vector2i = Vector2i(origin_x, origin_y)
 		for x in range(center.x - radius, center.x + radius + 1):
@@ -138,19 +150,7 @@ func generate_room(i: int, level_size: Vector2i) -> void:
 					if not room_tiles.has(thiscoords):
 						add_floor_tile(thiscoords, i)
 					else:
-						i = handle_war(thiscoords, i)
-
-	# Add walls *around this room only*
-	var directions: Array[Vector2i] = [
-		Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1),
-		Vector2i(-1,  0),                  Vector2i(1,  0),
-		Vector2i(-1,  1), Vector2i(0,  1), Vector2i(1,  1)
-	]
-	for tile in room_dic[i]["tiles"]:
-		for dir in directions:
-			var neighbor: Vector2i = tile + dir
-			if not room_tiles.has(neighbor):
-				place_wall_at(neighbor)
+						i = handle_combine(thiscoords, i)
 
 func generate_walls() -> void:
 	var directions: Array[Vector2i] = [
@@ -159,48 +159,13 @@ func generate_walls() -> void:
 		Vector2i(-1,  1), Vector2i(0,  1), Vector2i(1,  1)
 	]
 
-	# Iterate over a snapshot of keys to avoid mutation issues while placing walls
 	var keys_snapshot: Array = room_tiles.keys()
 	for tile in keys_snapshot:
-		# tile must exist, but re-check because earlier writes may have changed things
 		if not room_tiles.has(tile):
 			continue
-
 		for dir in directions:
 			var neighbor: Vector2i = tile + dir
-
-			# Neighbor is outside all rooms — add a wall
 			if not room_tiles.has(neighbor):
-				place_wall_at(neighbor)
-				continue
-
-			var my_room: int = room_tiles[tile]
-			var their_room: int = room_tiles[neighbor]
-
-			if my_room == their_room:
-				continue  # same room, no border wall
-
-			# Validate we have war data
-			if not room_dic.has(my_room) or not room_dic.has(their_room):
-				continue
-			if not room_dic[my_room].has("war_with"):
-				continue
-			if not room_dic[my_room]["war_with"].has(their_room):
-				continue
-
-			var result: int = room_dic[my_room]["war_with"][their_room]
-			var loser := -1
-
-			match result:
-				Area_War.WIN:
-					loser = their_room
-				Area_War.LOSE:
-					loser = my_room
-				Area_War.COMBINE:
-					continue  # merged; no border wall
-
-			# Place wall on the losing room's tile — but only if neighbor still mapped
-			if room_tiles.has(neighbor) and room_tiles[neighbor] == loser:
 				place_wall_at(neighbor)
 
 # --- corridors -----------------------------------------------------
@@ -211,9 +176,7 @@ func connect_rooms() -> void:
 	if unconnected.is_empty():
 		return
 
-	# Bucket for corridors
-	room_dic[-1] = {"tiles": [], "center": Vector2i.ZERO, "war_with": {}}
-
+	room_dic[-1] = {"tiles": [], "center": Vector2i.ZERO}
 	connected.append(unconnected.pop_front())
 
 	while not unconnected.is_empty():
@@ -243,13 +206,11 @@ func connect_rooms() -> void:
 func create_corridor(from: Vector2i, to: Vector2i, room_id: int) -> void:
 	var current := from
 
-	# Horizontal movement
 	while current.x != to.x:
 		var step: int = sign(to.x - current.x)
 		current.x += step
 		dig_corridor_tile(current, room_id, "horizontal")
 
-	# Vertical movement
 	while current.y != to.y:
 		var step: int = sign(to.y - current.y)
 		current.y += step
@@ -258,28 +219,73 @@ func create_corridor(from: Vector2i, to: Vector2i, room_id: int) -> void:
 func dig_corridor_tile(pos: Vector2i, _room_id: int, direction: String) -> void:
 	var floor_offsets: Array[Vector2i] = []
 
-	# 2-wide corridor, widen perpendicular to direction
 	if direction == "horizontal":
-		floor_offsets = [Vector2i(0, 0), Vector2i(0, 1)]  # vertical widening
-	elif direction == "vertical":
-		floor_offsets = [Vector2i(0, 0), Vector2i(1, 0)]  # horizontal widening
+		floor_offsets = [Vector2i(0, 0), Vector2i(0, 1)]  # widen vertically
+	else:
+		floor_offsets = [Vector2i(0, 0), Vector2i(1, 0)]  # widen horizontally
 
-	# Place floor tiles (use corridor bucket -1)
 	for offset in floor_offsets:
 		var tile: Vector2i = pos + offset
 		if not room_tiles.has(tile):
 			add_floor_tile(tile, -1)
 
-	# 8-neighborhood walls around corridor strip
-	var wall_offsets: Array[Vector2i] = [
+# --- edge room detection & spawns ---------------------------------
+
+func _dirs8() -> Array[Vector2i]:
+	return [
 		Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1),
 		Vector2i(-1,  0),                  Vector2i(1,  0),
 		Vector2i(-1,  1), Vector2i(0,  1), Vector2i(1,  1)
 	]
 
-	for offset in floor_offsets:
-		var tile2: Vector2i = pos + offset
-		for dir in wall_offsets:
-			var neighbor: Vector2i = tile2 + dir
-			if not room_tiles.has(neighbor):
-				place_wall_at(neighbor)
+func is_edge_room(room_id: int) -> bool:
+	if room_id == -1:
+		return false
+	if not room_dic.has(room_id):
+		return false
+	var tiles: Array = room_dic[room_id].get("tiles", [])
+	for t in tiles:
+		var tile: Vector2i = t
+		for d in _dirs8():
+			var n: Vector2i = tile + d
+			if not room_tiles.has(n):
+				return true
+	return false
+
+func get_edge_rooms() -> Array:
+	var result: Array = []
+	for rid in room_dic.keys():
+		if int(rid) == -1:
+			continue
+		if is_edge_room(int(rid)):
+			result.append(int(rid))
+	return result
+
+func pick_edge_spawn(room_id: int) -> Vector2i:
+	if not room_dic.has(room_id):
+		return Vector2i.ZERO
+	var candidates: Array[Vector2i] = []
+	var tiles: Array = room_dic[room_id].get("tiles", [])
+	for t in tiles:
+		var tile: Vector2i = t
+		var touches_outside := false
+		for d in _dirs8():
+			var n := tile + d
+			if not room_tiles.has(n):
+				touches_outside = true
+				break
+		if touches_outside:
+			candidates.append(tile)
+	if candidates.is_empty():
+		return room_dic[room_id].get("center", Vector2i.ZERO)
+	return candidates[randi() % candidates.size()]
+
+func get_edge_spawns(max_players: int) -> Array[Vector2i]:
+	var spawns: Array[Vector2i] = []
+	var edges: Array = get_edge_rooms()
+	edges.shuffle()
+	for rid in edges:
+		if spawns.size() >= max_players:
+			break
+		spawns.append(pick_edge_spawn(int(rid)))
+	return spawns
