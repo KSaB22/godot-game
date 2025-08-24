@@ -1,33 +1,98 @@
-[gd_scene load_steps=2 format=3 uid="uid://c6op3cjtw62j7"]
+[gd_scene load_steps=4 format=3 uid="uid://c6op3cjtw62j7"]
 
 [ext_resource type="Script" uid="uid://bfqyh12kvyjs1" path="res://scripts/main_menu.gd" id="1_l6cm7"]
+[ext_resource type="Script" uid="uid://w0beltaug81i" path="res://scripts/server_browser.gd" id="2_ekxnf"]
+[ext_resource type="PackedScene" uid="uid://dt87exg2bh12q" path="res://scenes/server_info.tscn" id="3_bqqt6"]
 
 [node name="MainMenu" type="Node2D"]
 script = ExtResource("1_l6cm7")
 
-[node name="Level" type="TextEdit" parent="."]
-offset_left = -144.0
-offset_top = -55.0
-offset_right = 148.0
-offset_bottom = -20.0
-placeholder_text = "Level (default = 1):"
-
 [node name="Camera2D" type="Camera2D" parent="."]
 
 [node name="Seed" type="TextEdit" parent="."]
-offset_left = -144.0
-offset_top = 14.0
-offset_right = 148.0
-offset_bottom = 49.0
+offset_left = -146.0
+offset_top = -214.0
+offset_right = 146.0
+offset_bottom = -179.0
 placeholder_text = "Seed (default = 1234):"
 
-[node name="Button" type="Button" parent="."]
-offset_left = -38.0
-offset_top = 79.0
-offset_right = 41.0
-offset_bottom = 110.0
-text = "Continue"
+[node name="HostBtn" type="Button" parent="."]
+offset_left = -46.0
+offset_top = -165.0
+offset_right = 45.0
+offset_bottom = -134.0
+text = "Host game"
 
-[connection signal="text_changed" from="Level" to="." method="_on_level_text_changed"]
+[node name="ServerBrowser" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_left = -106.0
+offset_top = 17.0
+offset_right = -66.0
+offset_bottom = 57.0
+script = ExtResource("2_ekxnf")
+serverInfo = ExtResource("3_bqqt6")
+
+[node name="BroadcastTimer" type="Timer" parent="ServerBrowser"]
+
+[node name="Panel" type="Panel" parent="ServerBrowser"]
+layout_mode = 0
+offset_left = -183.0
+offset_top = -12.0
+offset_right = 398.0
+offset_bottom = 252.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ServerBrowser/Panel"]
+layout_mode = 0
+offset_top = 1.0
+offset_right = 580.0
+offset_bottom = 263.0
+
+[node name="HBoxContainer" type="HBoxContainer" parent="ServerBrowser/Panel/VBoxContainer"]
+layout_mode = 2
+
+[node name="NameLbl" type="Label" parent="ServerBrowser/Panel/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Name"
+
+[node name="IPLbl" type="Label" parent="ServerBrowser/Panel/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "IP"
+
+[node name="SeedLbl" type="Label" parent="ServerBrowser/Panel/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Game seed"
+
+[node name="PlayerCountLbl" type="Label" parent="ServerBrowser/Panel/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Player Count"
+
+[node name="JoinLbl" type="Label" parent="ServerBrowser/Panel/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Join"
+
+[node name="StartBtn" type="Button" parent="."]
+offset_left = 5.0
+offset_top = -37.0
+offset_right = 98.0
+offset_bottom = -6.0
+disabled = true
+text = "Start game"
+
+[node name="listnerPortLbl" type="Label" parent="."]
+offset_left = 283.0
+offset_top = -232.0
+offset_right = 490.0
+offset_bottom = -180.0
+text = "Bound to Listen port:"
+
 [connection signal="text_changed" from="Seed" to="." method="_on_seed_text_changed"]
-[connection signal="pressed" from="Button" to="." method="_on_button_pressed"]
+[connection signal="pressed" from="HostBtn" to="." method="_on_host_button_pressed"]
+[connection signal="timeout" from="ServerBrowser/BroadcastTimer" to="ServerBrowser" method="_on_broadcast_timer_timeout"]
+[connection signal="pressed" from="StartBtn" to="." method="_on_button_pressed"]
+[connection signal="pressed" from="StartBtn" to="." method="_on_start_btn_pressed"]

@@ -15,13 +15,27 @@ var current_room_id: int = -2
 var last_non_corridor_room_id: int = -2
 
 @onready var level_tile_map: TileMap = $TileMap
-@onready var main_player: CharacterBody2D = $Player
+
+@export var PlayerScene: PackedScene
 
 func _ready() -> void:
 	generate_level()
 	var spawns: Array[Vector2i] = get_edge_spawns(max_players)
-	if spawns.size() > 0 and is_instance_valid(main_player):
-		main_player.global_position = tile_to_global(spawns[0])
+	var index = 0
+	for i in GameManager.Players:
+		var current_player = PlayerScene.instantiate()
+		add_child(current_player)
+
+		var cam := Camera2D.new()
+		current_player.add_child(cam)
+
+		cam.zoom = Vector2(2, 2)
+		cam.position = Vector2.ZERO
+		cam.position_smoothing_enabled = true
+		cam.position_smoothing_speed = 8.0
+		cam.make_current()
+		current_player.global_position = tile_to_global(spawns[index])
+		index +=1
 
 func _process(_delta: float) -> void:
 	#var exact_room: int = get_current_room_id(false)
@@ -63,8 +77,8 @@ func room_id_at_global(global_pos: Vector2) -> int:
 
 # Get the main player's current room.
 # use_last_known_inside=true will return the last non-corridor room when in a corridor.
-func get_current_room_id(use_last_known_inside: bool = false) -> int:
-	var rid: int = room_id_at_global(main_player.global_position)
+func get_current_room_id(currentPlayer, use_last_known_inside: bool = false) -> int:
+	var rid: int = room_id_at_global(currentPlayer.global_position)
 
 	# Update tracking vars
 	if rid != current_room_id:

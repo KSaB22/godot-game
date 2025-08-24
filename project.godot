@@ -11,9 +11,13 @@ config_version=5
 [application]
 
 config/name="ProjectGame"
-run/main_scene="uid://bh1f6f4ljteqg"
+run/main_scene="uid://c6op3cjtw62j7"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+GameManager="*res://scripts/GameManager.gd"
 
 [input]
 
