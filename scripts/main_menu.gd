@@ -77,6 +77,7 @@ func peer_disconnected(id):
 
 func connected_to_server():
 	var table := $ServerBrowser/Panel/VBoxContainer
+	seedTE.editable = false
 	for row in table.get_children():
 		var btn := row.get_node_or_null("JoinBtn")
 		if btn and btn is Button:
@@ -89,12 +90,14 @@ func connection_failed():
 	print("Couldnt Connect")
 
 @rpc("any_peer", "call_local")
-func startGame():
+func startGame(level_seed, level_players):
 	var scene_res = load("res://scenes/Level.tscn")
 	var scene = scene_res.instantiate()
 
 	# Now you can safely set properties defined in Level.gd
-	scene.game_seed = GameManager.seed
+	GameManager.seed = level_seed
+	GameManager.Players = level_players
+	scene.game_seed = level_seed
 	scene.max_players = GameManager.Players.size()
 
 	get_tree().root.add_child(scene)
@@ -103,5 +106,5 @@ func startGame():
 
 
 func _on_start_btn_pressed() -> void:
-	startGame.rpc()
+	startGame.rpc(GameManager.seed, GameManager.Players)
 	pass # Replace with function body.

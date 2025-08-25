@@ -11,8 +11,6 @@ func _ready() -> void:
 		cam.make_current()
 
 func _physics_process(_delta: float) -> void:
-	if multiplayer.get_unique_id() != 1:
-		print(str(multiplayer.get_unique_id()) + " ------- " + name)
 	if $MultiplayerSynchronizer.get_multiplayer_authority() == multiplayer.get_unique_id():
 		var vx := Input.get_axis("ui_left","ui_right") * SPEED
 		var vy := Input.get_axis("ui_up","ui_down") * SPEED
@@ -20,5 +18,3 @@ func _physics_process(_delta: float) -> void:
 		velocity.y = vy if (abs(vy) > 0.0) else move_toward(velocity.y, 0.0, SPEED)
 		syncPos = global_position
 		move_and_slide()
-	else: 
-		global_position = global_position.lerp(syncPos,0.5)

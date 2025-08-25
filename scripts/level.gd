@@ -31,8 +31,8 @@ func _ready() -> void:
 		p.name = str(peer_id)
 		p.set_multiplayer_authority(peer_id)  
 		add_child(p, true)
-		p.global_position = Vector2(0,0) #tile_to_global(spawns[index])
-		p.syncPos = Vector2(0,0) #tile_to_global(spawns[index])
+		p.global_position = tile_to_global(spawns[index])
+		p.syncPos = tile_to_global(spawns[index])
 		index += 1
 
 func _process(_delta: float) -> void:
