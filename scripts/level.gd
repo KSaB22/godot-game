@@ -18,24 +18,22 @@ var last_non_corridor_room_id: int = -2
 
 @export var PlayerScene: PackedScene
 
+@onready var spawner: MultiplayerSpawner = $MultiplayerSpawner
+@onready var playerSpawns: Node2D = $Players
+
 func _ready() -> void:
 	generate_level()
 	var spawns: Array[Vector2i] = get_edge_spawns(max_players)
-	var index = 0
-	for i in GameManager.Players:
-		var current_player = PlayerScene.instantiate()
-		add_child(current_player)
-
-		var cam := Camera2D.new()
-		current_player.add_child(cam)
-
-		cam.zoom = Vector2(2, 2)
-		cam.position = Vector2.ZERO
-		cam.position_smoothing_enabled = true
-		cam.position_smoothing_speed = 8.0
-		cam.make_current()
-		current_player.global_position = tile_to_global(spawns[index])
-		index +=1
+	var index := 0
+	for peer_id in GameManager.Players:
+		print("This is character  " + str(peer_id))
+		var p := PlayerScene.instantiate()
+		p.name = str(peer_id)
+		p.set_multiplayer_authority(peer_id)  
+		add_child(p, true)
+		p.global_position = Vector2(0,0) #tile_to_global(spawns[index])
+		p.syncPos = Vector2(0,0) #tile_to_global(spawns[index])
+		index += 1
 
 func _process(_delta: float) -> void:
 	#var exact_room: int = get_current_room_id(false)

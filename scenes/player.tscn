@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cpcexofc4i1dl"]
+[gd_scene load_steps=9 format=3 uid="uid://cpcexofc4i1dl"]
 
 [ext_resource type="Texture2D" uid="uid://bhx8wgx4j5us6" path="res://assets/2D Pixel Dungeon Asset Pack/Character_animation/priests_idle/priest2/v1/priest2_v1_1.png" id="1_dqkch"]
 [ext_resource type="Script" uid="uid://4k4lvd74bosk" path="res://scripts/player.gd" id="1_qlg0r"]
@@ -29,6 +29,11 @@ animations = [{
 [sub_resource type="CircleShape2D" id="CircleShape2D_qlg0r"]
 radius = 5.0
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_qlg0r"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
 [node name="Player" type="CharacterBody2D"]
 script = ExtResource("1_qlg0r")
 
@@ -43,3 +48,9 @@ frame_progress = 0.964815
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, -5)
 shape = SubResource("CircleShape2D_qlg0r")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(2, 2)
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_qlg0r")

@@ -101,6 +101,7 @@ func startGame():
 	self.hide()
 
 
+
 func _on_start_btn_pressed() -> void:
 	startGame.rpc()
 	pass # Replace with function body.

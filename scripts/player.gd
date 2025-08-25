@@ -2,18 +2,23 @@ extends CharacterBody2D
 
 @export var SPEED : float = 225.0
 
-func _physics_process(delta: float) -> void:
-	# Get the input direction and handle the movement/deceleration.
-	# As good practice, you should replace UI actions with custom gameplay actions.
-	var directionx := Input.get_axis("ui_left", "ui_right")
-	if directionx:
-		velocity.x = directionx * SPEED
-	else:
-		velocity.x = move_toward(velocity.x, 0, SPEED)
-	var directiony := Input.get_axis("ui_up","ui_down")
-	if directiony:
-		velocity.y = directiony * SPEED
-	else:
-		velocity.y = move_toward(velocity.y, 0, SPEED)
+@onready var cam: Camera2D = $Camera2D
+var syncPos = Vector2(0,0)
 
-	move_and_slide()
+func _ready() -> void:
+	$MultiplayerSynchronizer.set_multiplayer_authority(str(name).to_int())
+	if cam and is_multiplayer_authority():
+		cam.make_current()
+
+func _physics_process(_delta: float) -> void:
+	if multiplayer.get_unique_id() != 1:
+		print(str(multiplayer.get_unique_id()) + " ------- " + name)
+	if $MultiplayerSynchronizer.get_multiplayer_authority() == multiplayer.get_unique_id():
+		var vx := Input.get_axis("ui_left","ui_right") * SPEED
+		var vy := Input.get_axis("ui_up","ui_down") * SPEED
+		velocity.x = vx if (abs(vx) > 0.0) else move_toward(velocity.x, 0.0, SPEED)
+		velocity.y = vy if (abs(vy) > 0.0) else move_toward(velocity.y, 0.0, SPEED)
+		syncPos = global_position
+		move_and_slide()
+	else: 
+		global_position = global_position.lerp(syncPos,0.5)
