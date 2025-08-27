@@ -102,6 +102,7 @@ func startGame(level_seed, level_players):
 
 	get_tree().root.add_child(scene)
 	self.hide()
+	$ServerBrowser/BroadcastTimer.stop()
 
 
 
