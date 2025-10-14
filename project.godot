@@ -19,6 +19,10 @@ config/icon="res://icon.svg"
 
 GameManager="*res://scripts/GameManager.gd"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gamedev_assistant/plugin.cfg")
+
 [input]
 
 ui_left={

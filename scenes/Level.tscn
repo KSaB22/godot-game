@@ -1,7 +1,6 @@
-[gd_scene load_steps=6 format=3 uid="uid://bh1f6f4ljteqg"]
+[gd_scene load_steps=5 format=3 uid="uid://bh1f6f4ljteqg"]
 
 [ext_resource type="Script" uid="uid://bxj018wuaf5vt" path="res://scripts/level.gd" id="1_6vs76"]
-[ext_resource type="PackedScene" uid="uid://cpcexofc4i1dl" path="res://scenes/player.tscn" id="1_uhqny"]
 [ext_resource type="Texture2D" uid="uid://dppgjvmmydhai" path="res://assets/2D Pixel Dungeon Asset Pack/character and tileset/Dungeon_Tileset_test.png" id="2_6vs76"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_6vs76"]
@@ -140,7 +139,6 @@ sources/0 = SubResource("TileSetAtlasSource_6vs76")
 
 [node name="Level" type="Node2D"]
 script = ExtResource("1_6vs76")
-PlayerScene = ExtResource("1_uhqny")
 
 [node name="TileMap" type="TileMap" parent="."]
 position = Vector2(-1, 0)

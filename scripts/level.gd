@@ -22,23 +22,22 @@ var last_non_corridor_room_id: int = -2
 @onready var playerSpawns: Node2D = $Players
 
 func _ready() -> void:
+	add_to_group("level")
 	generate_level()
 	var spawns: Array[Vector2i] = get_edge_spawns(max_players)
 	var index := 0
 	for peer_id in GameManager.Players:
 		print("This is character  " + str(peer_id))
+		PlayerScene = preload("res://scenes/player.tscn")
 		var p := PlayerScene.instantiate()
 		p.name = str(peer_id)
 		p.set_multiplayer_authority(peer_id)  
-		add_child(p, true)
+		$Players.add_child(p, true)
 		p.global_position = tile_to_global(spawns[index])
 		p.syncPos = tile_to_global(spawns[index])
 		index += 1
 
 func _process(_delta: float) -> void:
-	#var exact_room: int = get_current_room_id(false)
-	#var stable_room: int = get_current_room_id(true)
-	#print("exact:", exact_room, " stable:", stable_room)
 	return
 
 func generate_level() -> void:
@@ -301,3 +300,11 @@ func get_edge_spawns(max_players: int) -> Array[Vector2i]:
 			break
 		spawns.append(pick_edge_spawn(int(rid)))
 	return spawns
+
+func died(id):
+	var players = $Players.get_children()
+	for player in players:
+		if id == player.name:
+			player.die()
+			return
+	return
