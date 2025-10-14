@@ -4,8 +4,9 @@ extends CharacterBody2D
 @export var move_speed: float = 80.0
 @export var attack_damage: int = 10
 @export var attack_cooldown: float = 2.0
-@export var projectile_speed: float = 200.0
-@export var max_health: int = 30
+@export var max_health: int = 20
+
+@export var projectile_scene: PackedScene
 
 var player_in_same_room: bool = false
 var player_ref: Node2D = null
@@ -66,11 +67,9 @@ func _physics_process(delta):
 		if animated_sprite.animation != "walk":
 			animated_sprite.play("walk")
 		
-		# Flip sprite based on direction
-		if direction.x > 0:
-			animated_sprite.flip_h = false
-		else:
-			animated_sprite.flip_h = true
+		# Flip sprite based on direction, ignoring vertical-only movement
+		if direction.x != 0:
+			animated_sprite.flip_h = direction.x < 0
 	else:
 		# Player in attack range but cooling down
 		velocity = Vector2.ZERO
@@ -93,15 +92,23 @@ func update_player_in_same_room():
 	
 	# Find the nearest player in the same room
 	var players = get_tree().get_nodes_in_group("player")
-	player_in_same_room = false
-	player_ref = null
+	var closest_player = null
+	var min_distance_sq = INF # Use squared distance to avoid sqrt
 	
 	for player in players:
 		var player_room_id = level.room_id_at_global(player.global_position)
 		if player_room_id == enemy_room_id and enemy_room_id >= 0:
-			player_in_same_room = true
-			player_ref = player
-			break
+			var distance_sq = global_position.distance_squared_to(player.global_position)
+			if distance_sq < min_distance_sq:
+				min_distance_sq = distance_sq
+				closest_player = player
+	
+	if closest_player:
+		player_in_same_room = true
+		player_ref = closest_player
+	else:
+		player_in_same_room = false
+		player_ref = null
 
 func attack_player(direction: Vector2):
 	if not can_attack or player_ref == null:
@@ -109,33 +116,16 @@ func attack_player(direction: Vector2):
 	
 	can_attack = false
 	attack_timer = attack_cooldown
-	
-	# Play attack animation
-	if animated_sprite.sprite_frames and animated_sprite.sprite_frames.has_animation("attack"):
-		animated_sprite.play("attack")
-	
-	# Launch projectile
+
 	launch_projectile(direction)
 
 func launch_projectile(direction: Vector2):
 	if not projectile_spawn:
 		return
-	
-	var projectile_scene = load("res://scenes/projectile.tscn")
-	if not projectile_scene:
-		print("Projectile scene not found!")
-		return
-	
+		
 	var projectile = projectile_scene.instantiate()
 	projectile.global_position = projectile_spawn.global_position
 	projectile.rotation = direction.angle()
-	
+	projectile.damage = attack_damage
+	projectile.is_player_projectile = false
 	get_parent().add_child(projectile)
-	
-	if projectile.has_method("setup"):
-		projectile.setup(direction * projectile_speed, attack_damage, self)
-
-	if direction.x > 0:
-		animated_sprite.flip_h = false
-	else:
-		animated_sprite.flip_h = true
