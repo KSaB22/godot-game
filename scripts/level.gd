@@ -1,6 +1,8 @@
 extends Node2D
 
+# Added a new enum for Room_Special_Type
 enum Room_types { RECTANGLE, CIRCLE }
+enum Room_Special_Type { SPAWN, EMPTY, COMBAT, LOOT }
 
 const LAYER := 0
 const WALL_ATLAS := Vector2i(9, 6)
@@ -10,13 +12,13 @@ var max_players: int = 2
 var room_dic := {}
 var room_tiles := {}
 
-# Track current/last room for the main player
 var current_room_id: int = -2
 var last_non_corridor_room_id: int = -2
 
 @onready var level_tile_map: TileMap = $TileMap
 
 @export var PlayerScene: PackedScene
+@export var EnemyScene: PackedScene
 
 @onready var spawner: MultiplayerSpawner = $MultiplayerSpawner
 @onready var playerSpawns: Node2D = $Players
@@ -26,11 +28,70 @@ func _ready() -> void:
 	add_to_group("level")
 	generate_level()
 	handle_spawns()
-	
+	spawn_enemies()
 
 
 func _process(_delta: float) -> void:
 	return
+
+# --- Custom Functions for Room Ranking and Types ---
+
+func _assign_room_types_and_ranks() -> void:
+	var leaf_rooms = get_leaf_rooms()
+	var max_depth = 0
+	for room_id in room_dic:
+		if room_id >= 0 and room_dic[room_id]["depth"] > max_depth:
+			max_depth = room_dic[room_id]["depth"]
+
+	for room_id in room_dic.keys():
+		if room_id < 0:
+			continue
+
+		if room_id in leaf_rooms:
+			room_dic[room_id]["special_type"] = Room_Special_Type.SPAWN
+			room_dic[room_id]["rank"] = 1
+		else:
+			var rand_type = randi_range(1, 3) # EMPTY, COMBAT, or LOOT
+			room_dic[room_id]["special_type"] = rand_type
+			
+			# Assign rank based on depth
+			if max_depth > 0:
+				# Normalized depth (0 to 1) and then scaled to rank (1 to 5)
+				var normalized_depth = float(room_dic[room_id]["depth"]) / max_depth
+				room_dic[room_id]["rank"] = 5 - int(normalized_depth * 4)
+			else:
+				room_dic[room_id]["rank"] = 5 # If only one room exists
+
+
+# --- Spawning Logic ---
+
+func spawn_enemies() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var enemies_node = Node2D.new()
+	enemies_node.name = "Enemies"
+	add_child(enemies_node)
+
+	for room_id in room_dic.keys():
+		if room_id < 0:
+			continue
+			
+		var room_data = room_dic[room_id]
+
+		if room_data["special_type"] == Room_Special_Type.COMBAT:
+			var rank = room_data["rank"]
+			var num_enemies = 0
+			var min_enemies = 2 + (rank - 1) * 1.5
+			var max_enemies = 6 + (rank - 1) * 2.25
+			num_enemies = randi_range(int(min_enemies), int(max_enemies))
+
+			for i in range(num_enemies):
+				var spawn_pos = pick_spawn_in_room(room_id)
+				var enemy = EnemyScene.instantiate()
+				enemy.global_position = tile_to_global(spawn_pos)
+				enemies_node.add_child(enemy)
+
 
 func handle_spawns() -> void:
 	var spawns: Array[Dictionary] = get_leaf_spawns(max_players)
@@ -67,6 +128,7 @@ func generate_level() -> void:
 
 	connect_rooms()
 	_calculate_all_room_depths()
+	_assign_room_types_and_ranks() # New function call
 	generate_walls()
 
 
@@ -158,7 +220,9 @@ func generate_room(i: int, level_size: Vector2i) -> void:
 		"center": Vector2i.ZERO,
 		"parent": -1,
 		"children": [],
-		"depth": 0 
+		"depth": 0,
+		"special_type": Room_Special_Type.EMPTY, # Default type
+		"rank": 0 # Default rank
 	}
 
 	var origin_x: int = randi_range(-level_size.x / 2, level_size.x / 2)
@@ -336,7 +400,7 @@ func pick_spawn_in_room(room_id: int) -> Vector2i:
 			if not room_tiles.has(n):
 				touches_outside = true
 				break
-		if touches_outside:
+		if not touches_outside:
 			candidates.append(tile)
 			
 	if candidates.is_empty():

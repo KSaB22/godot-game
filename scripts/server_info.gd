@@ -10,4 +10,3 @@ func _process(delta: float) -> void:
 
 func _on_join_btn_pressed() -> void:
 	joinGame.emit($IPLbl.text)
-	pass # Replace with function body.

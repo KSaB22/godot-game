@@ -21,16 +21,9 @@ func _physics_process(delta):
 			# Player projectile: only damage enemies
 			if collider.has_method("take_damage"):
 				collider.take_damage(damage)
-				queue_free()
-			else:
-				queue_free()
 		else:
 			# Enemy projectile: only damage players
 			if collider.is_in_group("player"):
 				if collider.has_method("take_damage"):
 					collider.take_damage(damage)
-					queue_free()
-			elif collider.is_in_group("enemy"):
-				return
-			else:
-				queue_free()
+		queue_free()
