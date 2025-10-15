@@ -3,9 +3,9 @@
 [ext_resource type="Script" uid="uid://2lnr7by01fdl" path="res://scripts/projectile.gd" id="1_c8fcr"]
 [ext_resource type="Texture2D" uid="uid://bujxfsqyd1oe6" path="res://assets/2D Pixel Dungeon Asset Pack/items and trap_animation/arrow/Just_arrow.png" id="2_q3m7n"]
 
-[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_softn"]
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_q3m7n"]
 radius = 2.0
-height = 10.0
+height = 8.0
 
 [node name="Projectile" type="CharacterBody2D"]
 script = ExtResource("1_c8fcr")
@@ -14,6 +14,10 @@ script = ExtResource("1_c8fcr")
 rotation = -1.5708
 texture = ExtResource("2_q3m7n")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-rotation = -1.5708
-shape = SubResource("CapsuleShape2D_softn")
+[node name="Area2D" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+rotation = 1.5708
+shape = SubResource("CapsuleShape2D_q3m7n")
+
+[connection signal="body_entered" from="Area2D" to="." method="_on_area_2d_body_entered"]

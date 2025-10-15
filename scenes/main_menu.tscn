@@ -94,5 +94,5 @@ text = "Bound to Listen port:"
 [connection signal="text_changed" from="Seed" to="." method="_on_seed_text_changed"]
 [connection signal="pressed" from="HostBtn" to="." method="_on_host_button_pressed"]
 [connection signal="timeout" from="ServerBrowser/BroadcastTimer" to="ServerBrowser" method="_on_broadcast_timer_timeout"]
-[connection signal="pressed" from="StartBtn" to="." method="_on_start_btn_pressed"]
 [connection signal="pressed" from="StartBtn" to="." method="_on_button_pressed"]
+[connection signal="pressed" from="StartBtn" to="." method="_on_start_btn_pressed"]

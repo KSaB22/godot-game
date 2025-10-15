@@ -10,20 +10,19 @@ func _ready() -> void:
 	direction = Vector2.RIGHT.rotated(global_rotation)
 
 func _physics_process(delta):
-	velocity = direction * speed
-	var collision = move_and_collide(velocity * delta)
+	global_position += direction * speed * delta
 	
-	if collision:
-		print("Collided")
-		var collider = collision.get_collider()
-		
-		if is_player_projectile:
-			# Player projectile: only damage enemies
-			if collider.has_method("take_damage"):
-				collider.take_damage(damage)
-		else:
-			# Enemy projectile: only damage players
-			if collider.is_in_group("player"):
-				if collider.has_method("take_damage"):
-					collider.take_damage(damage)
-		queue_free()
+
+
+func _on_area_2d_body_entered(body: Node2D) -> void:
+	if is_player_projectile:
+		if body.has_method("take_damage"):
+			body.take_damage(damage)
+	else:
+		# Enemy projectile: only damage players
+		if body.is_in_group("player"):
+			if body.has_method("take_damage"):
+				body.take_damage(damage)
+		elif body.is_in_group("enemy"):
+			return
+	queue_free()
