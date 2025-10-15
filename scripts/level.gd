@@ -1,4 +1,3 @@
-# scripts/level.gd
 extends Node2D
 
 enum Room_types { RECTANGLE, CIRCLE }
@@ -15,6 +14,19 @@ var room_tiles := {}
 var current_room_id: int = -2
 var last_non_corridor_room_id: int = -2
 
+# --- New variables for handling weapon texture generation and data ---
+signal all_weapon_textures_generated
+var weapon_image_buffers := {} # Stores raw image data (PackedByteArray) for each rank
+var textures_generated_count := 0
+var weapon_prompts := {
+	1: "Common weapon",
+	2: "Uncommon weapon",
+	3: "Rare weapon",
+	4: "Epic and cool weapon",
+	5: "Legendary amazing weapon"
+}
+# --------------------------------------------------------------------
+
 @onready var level_tile_map: TileMap = $TileMap
 
 @export var PlayerScene: PackedScene
@@ -27,14 +39,40 @@ var last_non_corridor_room_id: int = -2
 
 func _ready() -> void:
 	add_to_group("level")
+	# Start generating textures as soon as the level is ready
+	_generate_weapon_textures()
 	generate_level()
 	handle_spawns()
 	spawn_enemies()
 
+# --- Functions for generating and handling weapon textures ---
+func _generate_weapon_textures():
+	if not multiplayer.is_server(): return
+	
+	ImageGenerator.image_generated.connect(_on_weapon_texture_generated)
+	for rank in weapon_prompts.keys():
+		ImageGenerator.generate(weapon_prompts[rank])
+
+func _on_weapon_texture_generated(texture: ImageTexture, prompt: String):
+	var image := texture.get_image()
+	# Store the raw PNG data in a buffer
+	var buffer := image.save_png_to_buffer()
+
+	for rank in weapon_prompts.keys():
+		if weapon_prompts[rank] == prompt:
+			weapon_image_buffers[rank] = buffer
+			textures_generated_count += 1
+			print("Generated texture data for rank %d weapon" % rank)
+			
+			# Once all textures are generated, emit a signal
+			if textures_generated_count == len(weapon_prompts):
+				emit_signal("all_weapon_textures_generated")
+				print("All weapon textures have been generated.")
+			break
+# -------------------------------------------------------------
 
 func _process(_delta: float) -> void:
 	return
-
 
 func _assign_room_types_and_ranks() -> void:
 	var leaf_rooms = get_leaf_rooms()
@@ -106,14 +144,25 @@ func check_room_cleared(room_id):
 				break
 
 		if all_enemies_dead:
+			# If textures aren't ready yet, wait for the signal
+			if textures_generated_count < len(weapon_prompts):
+				await all_weapon_textures_generated
+			
 			spawn_weapon_in_room(room_id)
 
 func spawn_weapon_in_room(room_id):
 	if WeaponScene:
 		var weapon = WeaponScene.instantiate()
+		weapon.name = "Weapon_" + str(room_id)
 		weapon.global_position = tile_to_global(room_dic[room_id]["center"])
-		weapon.z_index = 5 # Add this line to draw the weapon on top
-		add_child(weapon)
+		weapon.z_index = 5
+		add_child(weapon) # Add to tree BEFORE calling RPC
+
+		var rank = room_dic[room_id]["rank"]
+		if weapon_image_buffers.has(rank):
+			# Call the RPC on the weapon to set its texture for all players
+			weapon.set_texture_rpc.rpc(weapon_image_buffers[rank])
+
 
 func handle_spawns() -> void:
 	var spawns: Array[Dictionary] = get_leaf_spawns(max_players)
@@ -163,7 +212,7 @@ func global_to_tile(global_pos: Vector2) -> Vector2i:
 
 
 func room_id_at_tile(tile: Vector2i) -> int:
-	return int(room_tiles[tile]) if  room_tiles.has(tile) else -2
+	return int(room_tiles[tile]) if room_tiles.has(tile) else -2
 
 
 func room_id_at_global(global_pos: Vector2) -> int:

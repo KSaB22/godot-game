@@ -49,13 +49,15 @@ func _physics_process(delta):
 			attack_timer = current_attack_cooldown
 
 		if Input.is_action_just_pressed("PickUp") and weapon_in_range:
-			equip_weapon(weapon_in_range)
+			# Call the RPC to equip the weapon across the network
+			equip_weapon_rpc.rpc(weapon_in_range.get_path())
 
 		var input_vector = Vector2.ZERO
 		input_vector.x = Input.get_axis("ui_left", "ui_right")
 		input_vector.y = Input.get_axis("ui_up", "ui_down")
 		input_vector = input_vector.normalized()
 		handle_movement(input_vector)
+		
 		if not can_shoot:
 			attack_timer -= delta
 			if attack_timer <= 0:
@@ -101,11 +103,31 @@ func clear_weapon_in_range(weapon: Area2D):
 	if weapon_in_range == weapon:
 		weapon_in_range = null
 
-func equip_weapon(weapon):
-	current_weapon_damage = weapon.damage
-	current_attack_cooldown = weapon.attack_cooldown
-	
-	weapon_sprite.texture = weapon.get_node("Sprite2D").texture
-	
+# This RPC initiates the pickup process on all clients
+@rpc("any_peer", "call_local")
+func equip_weapon_rpc(weapon_path: NodePath):
+	var weapon = get_node_or_null(weapon_path)
+	if not weapon: return
+
+	# Only the player with authority gets the data and calls the next RPC
+	if is_multiplayer_authority():
+		var buffer = weapon.texture_buffer
+		set_equipped_weapon.rpc(buffer, weapon.damage, weapon.attack_cooldown)
+
+	# The weapon is removed from the game world for everyone
 	weapon.picked_up()
-	weapon_in_range = null
+
+# This RPC syncs the player's weapon appearance and stats to all clients
+@rpc("any_peer", "call_local")
+func set_equipped_weapon(buffer: PackedByteArray, damage: int, cooldown: float):
+	# Update stats for all clients
+	current_weapon_damage = damage
+	current_attack_cooldown = cooldown
+
+	# Create and apply the texture on each client's machine
+	var image = Image.new()
+	if image.load_png_from_buffer(buffer) == OK:
+		var texture = ImageTexture.create_from_image(image)
+		weapon_sprite.texture = texture
+	else:
+		push_error("Failed to create equipped weapon texture from network data.")

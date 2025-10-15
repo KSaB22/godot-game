@@ -66,8 +66,9 @@ func _generate_image_task(generation_data: Dictionary):
 	var model_path = ProjectSettings.globalize_path("res://embedded/bin/v1-5-pruned-emaonly.safetensors")
 	var lora_dir = ProjectSettings.globalize_path("res://embedded/bin/loras")
 	
-	# We no longer need an output file path.
-	# The "-o -" argument tells many command-line tools to write to standard output.
+	# --- FIX: Create a unique path for a temporary output file ---
+	var temp_image_path = "user://%s.png" % generation_id
+
 	var args = PackedStringArray([
 		"-m", model_path,
 		"--lora-model-dir", lora_dir,
@@ -78,24 +79,45 @@ func _generate_image_task(generation_data: Dictionary):
 		"--steps", "20",
 		"--cfg-scale", "7",
 		"-s", str(seed),
-		"-o", "-" # CHANGED: This now outputs to stdout instead of a file.
+		"-o", ProjectSettings.globalize_path(temp_image_path) 
 	])
 
-	# This array will capture the program's output.
-	var output = []
-	var exit_code = OS.execute(exe_path, args, output, true)
+	# This 'output' array will now only capture text-based errors from sd.exe
+	var output = [] 
+	var exit_code = OS.execute(exe_path, args, output)
 	
-	# If successful, the raw image data will be in the 'output' array.
-	if exit_code == 0 and not output.is_empty():
-		# The output is a string, so we convert it to a byte buffer.
-		var image_buffer: PackedByteArray = output[0].to_utf8_buffer()
-		call_deferred("_generation_complete", generation_id, image_buffer, "")
+	var image_buffer = PackedByteArray()
+	var error_msg = ""
+
+	if exit_code == 0:
+		# --- FIX: Load the image data directly and safely from the file ---
+		if FileAccess.file_exists(temp_image_path):
+			image_buffer = FileAccess.get_file_as_bytes(temp_image_path)
+			if image_buffer.is_empty():
+				error_msg = "Generation failed: The output file was created but is empty."
+		else:
+			# If the program succeeded but the file doesn't exist, something is very wrong.
+			error_msg = "Generation failed: The output file was not created, despite a success code."
+			if not output.is_empty():
+				error_msg += "\nOutput: " + "\n".join(output)
+		# -------------------------------------------------------------
 	else:
-		var error_msg = "Generation failed (exit code: %d)" % exit_code
-		if output.size() > 0:
+		# If the program fails, we now capture and report its error message.
+		error_msg = "Generation failed (exit code: %d)" % exit_code
+		if not output.is_empty():
 			error_msg += "\n" + "\n".join(output)
-		# Pass an empty buffer on failure.
-		call_deferred("_generation_complete", generation_id, PackedByteArray(), error_msg)
+
+	# Schedule the main thread to process the result and clean up the temp file.
+	call_deferred("_generation_complete", generation_id, image_buffer, error_msg)
+	call_deferred("_cleanup_temp_file", temp_image_path)
+
+
+# --- New helper function to clean up the temporary image file ---
+func _cleanup_temp_file(file_path: String):
+	if FileAccess.file_exists(file_path):
+		var dir = DirAccess.open("user://")
+		if dir:
+			dir.remove(file_path.get_file())
 
 func _generation_complete(generation_id: String, image_buffer: PackedByteArray, error: String):
 	# This function now receives a byte buffer instead of a file path.
@@ -111,8 +133,8 @@ func _generation_complete(generation_id: String, image_buffer: PackedByteArray, 
 		var image = Image.new()
 		# Load the image directly from the byte buffer in memory.
 		if image.load_png_from_buffer(image_buffer) == OK:
-			var processed_image = _remove_background(image)
-			var texture = ImageTexture.create_from_image(processed_image)
+			#var processed_image = _remove_background(image)
+			var texture = ImageTexture.create_from_image(image)
 			emit_signal("image_generated", texture, generation_data["prompt"])
 		else:
 			var err_msg = "Failed to load image from memory buffer."
