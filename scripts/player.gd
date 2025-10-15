@@ -1,3 +1,4 @@
+# scripts/player.gd
 extends CharacterBody2D
 
 # Movement variables
@@ -9,6 +10,9 @@ extends CharacterBody2D
 @export var attack_cooldown: float = 0.5
 @export var projectile: PackedScene
 
+# Weapon stats
+var current_weapon_damage: int = projectile_damage
+var current_attack_cooldown: float = attack_cooldown
 
 # Multiplayer sync variables
 @export var syncedHP: float = 100.0
@@ -17,36 +21,36 @@ extends CharacterBody2D
 
 var can_shoot: bool = true
 var attack_timer: float = 0.0
+var weapon_in_range: Area2D = null
 
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var weapon_rotation: Node2D = $WeaponRotation
+@onready var weapon_sprite: Sprite2D = $WeaponRotation/Weapon
 @onready var muzzle: Node2D = $WeaponRotation/ProjectileSpawn
 @onready var camera: Camera2D = $Camera2D
-
 
 func _ready():
 	add_to_group("player")
 	$MultiplayerSynchronizer.set_multiplayer_authority(str(name).to_int())
 	if camera and is_multiplayer_authority():
 		camera.make_current()
-	# Make sure camera is current for this player instance
-	
-	# Set up animations if they exist
+
 	if animated_sprite.sprite_frames:
 		animated_sprite.play("idle")
 
 func _physics_process(delta):
 	if $MultiplayerSynchronizer.get_multiplayer_authority() == multiplayer.get_unique_id():
 		weapon_rotation.look_at(get_global_mouse_position())
-		syncRot = weapon_rotation.rotation # radians
-		
-		if Input.is_action_just_pressed("Fire") and can_shoot:
-			fire.rpc(projectile_damage)
-			can_shoot = false
-			attack_timer = attack_cooldown
+		syncRot = weapon_rotation.rotation
 
-		
-		# Handle input
+		if Input.is_action_just_pressed("Fire") and can_shoot:
+			fire.rpc()
+			can_shoot = false
+			attack_timer = current_attack_cooldown
+
+		if Input.is_action_just_pressed("PickUp") and weapon_in_range:
+			equip_weapon(weapon_in_range)
+
 		var input_vector = Vector2.ZERO
 		input_vector.x = Input.get_axis("ui_left", "ui_right")
 		input_vector.y = Input.get_axis("ui_up", "ui_down")
@@ -60,30 +64,26 @@ func _physics_process(delta):
 func handle_movement(input_vector):
 	if input_vector != Vector2.ZERO:
 		velocity = input_vector * speed
-		if animated_sprite.sprite_frames:
-			if animated_sprite.animation != "walk":
-				animated_sprite.play("walk")
+		if animated_sprite.sprite_frames and animated_sprite.animation != "walk":
+			animated_sprite.play("walk")
 		if input_vector.x != 0:
 			animated_sprite.flip_h = input_vector.x < 0
 	else:
 		velocity = Vector2.ZERO
-		if animated_sprite.sprite_frames:
-			if animated_sprite.animation != "idle":
-				animated_sprite.play("idle")
-	
-	# Move the character
+		if animated_sprite.sprite_frames and animated_sprite.animation != "idle":
+			animated_sprite.play("idle")
+
 	move_and_slide()
 
 @rpc("any_peer","call_local")
-func fire(damage):	
+func fire():
 	var b := projectile.instantiate()
 	b.global_position = muzzle.global_position
 	b.global_rotation = weapon_rotation.global_rotation
-	b.damage = damage
+	b.damage = current_weapon_damage
 	b.is_player_projectile = true
 	get_tree().root.add_child(b)
 
-# Damage handling for when player gets hit by enemy projectiles
 func take_damage(damage_amount: int):
 	syncedHP -= damage_amount
 	if syncedHP <= 0:
@@ -93,3 +93,19 @@ func take_damage(damage_amount: int):
 func die():
 	print("Player died!")
 	queue_free()
+
+func set_weapon_in_range(weapon: Area2D):
+	weapon_in_range = weapon
+
+func clear_weapon_in_range(weapon: Area2D):
+	if weapon_in_range == weapon:
+		weapon_in_range = null
+
+func equip_weapon(weapon):
+	current_weapon_damage = weapon.damage
+	current_attack_cooldown = weapon.attack_cooldown
+	
+	weapon_sprite.texture = weapon.get_node("Sprite2D").texture
+	
+	weapon.picked_up()
+	weapon_in_range = null

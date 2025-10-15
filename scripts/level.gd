@@ -1,6 +1,6 @@
+# scripts/level.gd
 extends Node2D
 
-# Added a new enum for Room_Special_Type
 enum Room_types { RECTANGLE, CIRCLE }
 enum Room_Special_Type { SPAWN, EMPTY, COMBAT, LOOT }
 
@@ -19,6 +19,7 @@ var last_non_corridor_room_id: int = -2
 
 @export var PlayerScene: PackedScene
 @export var EnemyScene: PackedScene
+@export var WeaponScene: PackedScene
 
 @onready var spawner: MultiplayerSpawner = $MultiplayerSpawner
 @onready var playerSpawns: Node2D = $Players
@@ -34,7 +35,6 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	return
 
-# --- Custom Functions for Room Ranking and Types ---
 
 func _assign_room_types_and_ranks() -> void:
 	var leaf_rooms = get_leaf_rooms()
@@ -51,19 +51,15 @@ func _assign_room_types_and_ranks() -> void:
 			room_dic[room_id]["special_type"] = Room_Special_Type.SPAWN
 			room_dic[room_id]["rank"] = 1
 		else:
-			var rand_type = randi_range(1, 3) # EMPTY, COMBAT, or LOOT
+			var rand_type = randi_range(1, 3)
 			room_dic[room_id]["special_type"] = rand_type
 			
-			# Assign rank based on depth
 			if max_depth > 0:
-				# Normalized depth (0 to 1) and then scaled to rank (1 to 5)
 				var normalized_depth = float(room_dic[room_id]["depth"]) / max_depth
 				room_dic[room_id]["rank"] = 5 - int(normalized_depth * 4)
 			else:
-				room_dic[room_id]["rank"] = 5 # If only one room exists
+				room_dic[room_id]["rank"] = 5
 
-
-# --- Spawning Logic ---
 
 func spawn_enemies() -> void:
 	if not multiplayer.is_server():
@@ -91,7 +87,33 @@ func spawn_enemies() -> void:
 				var enemy = EnemyScene.instantiate()
 				enemy.global_position = tile_to_global(spawn_pos)
 				enemies_node.add_child(enemy)
+				room_dic[room_id]["enemies"].append(enemy)
+				enemy.tree_exiting.connect(_on_enemy_killed.bind(room_id))
 
+func _on_enemy_killed(room_id):
+	await get_tree().create_timer(0.1).timeout
+	check_room_cleared(room_id)
+
+func check_room_cleared(room_id):
+	if not multiplayer.is_server():
+		return
+
+	if room_dic.has(room_id) and room_dic[room_id]["special_type"] == Room_Special_Type.COMBAT:
+		var all_enemies_dead = true
+		for enemy in room_dic[room_id]["enemies"]:
+			if is_instance_valid(enemy):
+				all_enemies_dead = false
+				break
+
+		if all_enemies_dead:
+			spawn_weapon_in_room(room_id)
+
+func spawn_weapon_in_room(room_id):
+	if WeaponScene:
+		var weapon = WeaponScene.instantiate()
+		weapon.global_position = tile_to_global(room_dic[room_id]["center"])
+		weapon.z_index = 5 # Add this line to draw the weapon on top
+		add_child(weapon)
 
 func handle_spawns() -> void:
 	var spawns: Array[Dictionary] = get_leaf_spawns(max_players)
@@ -128,11 +150,9 @@ func generate_level() -> void:
 
 	connect_rooms()
 	_calculate_all_room_depths()
-	_assign_room_types_and_ranks() # New function call
+	_assign_room_types_and_ranks()
 	generate_walls()
 
-
-# --- helpers -------------------------------------------------------
 
 func tile_to_global(tile: Vector2i) -> Vector2:
 	return level_tile_map.to_global(level_tile_map.map_to_local(tile))
@@ -211,8 +231,6 @@ func handle_combine(this_coords: Vector2i, i: int) -> int:
 	return low_id
 
 
-# --- generation ----------------------------------------------------
-
 func generate_room(i: int, level_size: Vector2i) -> void:
 	room_dic[i] = {
 		"type": Room_types.RECTANGLE if randf() < 0.8 else Room_types.CIRCLE,
@@ -221,8 +239,9 @@ func generate_room(i: int, level_size: Vector2i) -> void:
 		"parent": -1,
 		"children": [],
 		"depth": 0,
-		"special_type": Room_Special_Type.EMPTY, # Default type
-		"rank": 0 # Default rank
+		"special_type": Room_Special_Type.EMPTY,
+		"rank": 0,
+		"enemies": []
 	}
 
 	var origin_x: int = randi_range(-level_size.x / 2, level_size.x / 2)
@@ -270,8 +289,6 @@ func generate_walls() -> void:
 			if not room_tiles.has(neighbor):
 				place_wall_at(neighbor)
 
-
-# --- corridors -----------------------------------------------------
 
 func connect_rooms() -> void:
 	var connected: Array = []
@@ -338,8 +355,6 @@ func dig_corridor_tile(pos: Vector2i, direction: String) -> void:
 		if not room_tiles.has(tile):
 			add_floor_tile(tile, -1)
 			
-
-# --- tree-based room detection & spawns ---------------------------------
 
 func _calculate_all_room_depths() -> void:
 	var root_id = -1
